@@ -79,7 +79,7 @@ if opt=="1":
 
 	threshold = 19  #  BINARY threshold
 	blurValue = 41  # GaussianBlur parameter
-	bgSubThreshold = 50
+	bgSubThreshold = 70
 	learningRate = 0
 
 	cv2.namedWindow('trackbar')
@@ -98,7 +98,6 @@ if opt=="1":
 	cap_region_y_end=0.8  # start point/total width
 	output=""
 
-
 	while cam.isOpened():
 		ret,frame=cam.read()
 		frame = cv2.bilateralFilter(frame, 5, 50, 100) 
@@ -106,16 +105,15 @@ if opt=="1":
 		cv2.rectangle(frame, (int(cap_region_x_begin * frame.shape[1]), 0),
 		         (frame.shape[1], int(cap_region_y_end * frame.shape[0])), (255, 0, 0), 2)
 		cv2.imshow("original1",frame)
-		
+		frame = frame[0:int(cap_region_y_end * frame.shape[0]),
+                    int(cap_region_x_begin * frame.shape[1]):frame.shape[1]]
+		frameee=frame
 		#print(count)
 
 		if isBgCaptured == 1:  # this part wont run until background captured
 			count=(count+1)%110
 			if(count==109):
 				img = removeBG(frame)
-				img = img[0:int(cap_region_y_end * img.shape[0]),
-		                    int(cap_region_x_begin * img.shape[1]):img.shape[1]]
-				#cv2.imshow("original2",img)
 				converted = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 				skinMask = cv2.inRange(converted, lower, upper)
 
@@ -131,75 +129,76 @@ if opt=="1":
 				skin = cv2.bitwise_and(img, img, mask = skinMask)
 
 				# show the skin in the image along with the mask
-				#cv2.imshow("images", np.hstack([img, skin]))
-				img1=skin
+				#cv2.imshow("images", img)
 				# convert the image into binary image
 				gray = cv2.cvtColor(skin, cv2.COLOR_BGR2GRAY)
 				blur = cv2.GaussianBlur(gray, (blurValue, blurValue), 0)
 				#cv2.imshow('blur', blur)
 				ret, thresh = cv2.threshold(blur, threshold, 255, cv2.THRESH_BINARY)
-				#cv2.imshow('ori', thresh)
+				cv2.imshow('ori', thresh)
+				
+				if(cv2.countNonZero(thresh)<13000):
+					print("Please keep the Hand in frame")
+				else:
+					# get the coutours
+					thresh1 = copy.deepcopy(thresh)
+					_,contours, hierarchy = cv2.findContours(thresh1, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+					length = len(contours)
+					maxArea = -1
+					if length > 0:
+						for i in range(length):  # find the biggest contour (according to area)
+							temp = contours[i]
+							area = cv2.contourArea(temp)
+							if area > maxArea:
+								maxArea = area
+								ci = i
+
+						res = contours[ci]
+						hull = cv2.convexHull(res)
+						drawing = np.zeros(img.shape, np.uint8)
+						cv2.drawContours(drawing, [res], 0, (0, 255, 0), 2)
+						#cv2.drawContours(drawing, [hull], 0, (0, 0, 255), 3)
+
+						#app('System Events').keystroke(' ')  # simulate pressing blank space
 
 
+					cv2.imshow('output', drawing)
 
-				# get the coutours
-				thresh1 = copy.deepcopy(thresh)
-				_,contours, hierarchy = cv2.findContours(thresh1, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-				length = len(contours)
-				maxArea = -1
-				if length > 0:
-					for i in range(length):  # find the biggest contour (according to area)
-						temp = contours[i]
-						area = cv2.contourArea(temp)
-						if area > maxArea:
-							maxArea = area
-							ci = i
+					t = read_tensor_from_image_file(drawing,
+				        			  input_height=input_height,
+				        			  input_width=input_width,
+				        			  input_mean=input_mean,
+				        			  input_std=input_std)
 
-					res = contours[ci]
-					hull = cv2.convexHull(res)
-					drawing = np.zeros(img.shape, np.uint8)
-					cv2.drawContours(drawing, [res], 0, (0, 255, 0), 2)
-					#cv2.drawContours(drawing, [hull], 0, (0, 0, 255), 3)
+					input_name = "import/" + input_layer
+					output_name = "import/" + output_layer
+					input_operation = graph.get_operation_by_name(input_name);
+					output_operation = graph.get_operation_by_name(output_name);
 
-					#app('System Events').keystroke(' ')  # simulate pressing blank space
+					with tf.Session(graph=graph) as sess:
+						start = time.time()
+						results = sess.run(output_operation.outputs[0],
+						      {input_operation.outputs[0]: t})
+						end=time.time()
 
+					results = np.squeeze(results)
 
-				cv2.imshow('output', drawing)
-				t = read_tensor_from_image_file(drawing,
-		                			  input_height=input_height,
-		                			  input_width=input_width,
-		                			  input_mean=input_mean,
-		                			  input_std=input_std)
+					top_k = results.argsort()[-5:][::-1]
 
-				input_name = "import/" + input_layer
-				output_name = "import/" + output_layer
-				input_operation = graph.get_operation_by_name(input_name);
-				output_operation = graph.get_operation_by_name(output_name);
-
-				with tf.Session(graph=graph) as sess:
-					start = time.time()
-					results = sess.run(output_operation.outputs[0],
-					      {input_operation.outputs[0]: t})
-					end=time.time()
-
-				results = np.squeeze(results)
-
-				top_k = results.argsort()[-5:][::-1]
-
-				labels = load_labels(label_file)
-				#print(labels)
-				print('\nEvaluation time (1-image): {:.3f}s\n'.format(end-start))
-				template = "{} (score={:0.5f})"
-				if(labels[top_k[0]]==''):
-					suggest(output1)
-					break
-				output=output+labels[top_k[0]]
-				output1=output[1:]
-				if(len(output1)>0):
-					print(output1)
-	#			print(template)
-				#for i in top_k:
-				#	print(template.format(labels[i], results[i]))
+					labels = load_labels(label_file)
+					#print(labels)
+					print('\nEvaluation time (1-image): {:.3f}s\n'.format(end-start))
+					template = "{} (score={:0.5f})"
+					if(labels[top_k[0]]==''):
+						suggest(output1)
+						break
+					output=output+labels[top_k[0]]
+					output1=output[1:]
+					if(len(output1)>0):
+						print(output1)
+		#			print(template)
+					#for i in top_k:
+					#	print(template.format(labels[i], results[i]))
 
 
 
@@ -231,7 +230,7 @@ elif opt=="2":
 		image = cv2.imread(strr)
 		if not image is None:
 			cv2.imshow("Display 1", image)
-			cv2.waitKey(500)
+			cv2.waitKey(1500)
 		else:
 			print(input_str[i]+" not found")
 
