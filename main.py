@@ -43,6 +43,7 @@ def read_tensor_from_image_file(file_name, input_height=299, input_width=299,
 				input_mean=0, input_std=255):
   input_name = "file_reader"
   output_name = "normalized"
+  #file_reader = tf.read_file(file_name, input_name)
   image_reader = file_name
   float_caster = tf.cast(image_reader, tf.float32)
   dims_expander = tf.expand_dims(float_caster, 0);
@@ -84,7 +85,7 @@ if opt=="1":
 	cv2.namedWindow('trackbar')
 	cv2.createTrackbar('trh1', 'trackbar', threshold, 100, printThreshold)
 	count=0
-
+	#print(type(count))
 
 	lower = np.array([0, 0, 0], dtype = "uint8")
 	upper = np.array([74, 255, 255], dtype = "uint8")
@@ -139,6 +140,8 @@ if opt=="1":
 				ret, thresh = cv2.threshold(blur, threshold, 255, cv2.THRESH_BINARY)
 				#cv2.imshow('ori', thresh)
 
+
+
 				# get the coutours
 				thresh1 = copy.deepcopy(thresh)
 				_,contours, hierarchy = cv2.findContours(thresh1, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -157,6 +160,9 @@ if opt=="1":
 					drawing = np.zeros(img.shape, np.uint8)
 					cv2.drawContours(drawing, [res], 0, (0, 255, 0), 2)
 					#cv2.drawContours(drawing, [hull], 0, (0, 0, 255), 3)
+
+					#app('System Events').keystroke(' ')  # simulate pressing blank space
+
 
 				cv2.imshow('output', drawing)
 				t = read_tensor_from_image_file(drawing,
@@ -194,6 +200,10 @@ if opt=="1":
 	#			print(template)
 				#for i in top_k:
 				#	print(template.format(labels[i], results[i]))
+
+
+
+
 
 		k = cv2.waitKey(2)
 		if k == 27:  # press ESC to exit
