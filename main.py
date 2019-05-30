@@ -3,9 +3,11 @@ import numpy as np
 import copy
 import tensorflow as tf
 import time
-import os
 import sys
 import autocomplete
+import speech_recognition as sr
+import pyaudio
+import wave
 
 def printThreshold(thr):
     print("! Changed threshold to "+str(thr))
@@ -62,7 +64,7 @@ def load_labels(label_file):
   return label
 
 
-opt=input("Welcome to Sign Language Translator\n1.Convert Sign to Text\n2. Convert Text to Sign\nEnter your option:")
+opt=input("Welcome to Indian Sign Language Translator\n1. Convert Sign to Text\n2. Convert Speech/Text to Sign\nEnter your option:")
 if opt=="1":
 	cam=cv2.VideoCapture(0)
 	cam.set(200,200)
@@ -222,17 +224,79 @@ if opt=="1":
 			triggerSwitch = True
 			print ('!!!Trigger On!!!')
 elif opt=="2":
-	input_str=input("Enter the String: ")
-	input_str=input_str.upper()
-	print("Entered string: "+input_str)
-	for i in range(0,len(input_str)):
-		strr="sample/"+input_str[i]+".jpg"
-		image = cv2.imread(strr)
-		if not image is None:
-			cv2.imshow("Display 1", image)
-			cv2.waitKey(1500)
-		else:
-			print(input_str[i]+" not found")
+	opt1=input("What format is your input?\n1. Audio\n2. Text\nEnter your option:")
+	if opt1=="1":
+		CHUNK = 1024
+		FORMAT = pyaudio.paInt16
+		CHANNELS = 2
+		RATE = 44100
+		RECORD_SECONDS = 5
+		WAVE_OUTPUT_FILENAME = "output.wav"
+		p = pyaudio.PyAudio()
+		stream = p.open(format=FORMAT,
+				channels=CHANNELS,
+				rate=RATE,
+				input=True,
+				frames_per_buffer=CHUNK)
+
+		print("* recording")
+
+		frames = []
+		for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
+		    data = stream.read(CHUNK)
+		    frames.append(data)
+		print("* done recording")
+
+		stream.stop_stream()
+		stream.close()
+		p.terminate()
+
+		wf = wave.open(WAVE_OUTPUT_FILENAME, 'wb')
+		wf.setnchannels(CHANNELS)
+		wf.setsampwidth(p.get_sample_size(FORMAT))
+		wf.setframerate(RATE)
+		wf.writeframes(b''.join(frames))
+		wf.close()
+
+		r = sr.Recognizer()
+		harvard = sr.AudioFile('output.wav')
+		with harvard as source:
+			audio = r.record(source)
+		#print(type(audio))
+		input_str=r.recognize_google(audio)
+		input_str=input_str.upper()
+		print("Entered string: "+input_str)
+		for i in range(0,len(input_str)):
+			strr="sample/"+input_str[i]+".jpg"
+			image = cv2.imread(strr)
+			if not image is None:
+				cv2.imshow("Display 1", image)
+				cv2.waitKey(1500)
+			else:
+				if(input_str[i]==" "):
+					print("<space> not found")
+				else:
+					print(input_str[i]+" not found")
+		
+
+	elif opt1=="2":
+		input_str=input("Enter the String: ")
+		input_str=input_str.upper()
+		print("Entered string: "+input_str)
+		for i in range(0,len(input_str)):
+			strr="sample/"+input_str[i]+".jpg"
+			image = cv2.imread(strr)
+			if not image is None:
+				cv2.imshow("Display 1", image)
+				cv2.waitKey(1500)
+			else:
+				if(input_str[i]==" "):
+					print("<space> not found")
+				else:
+					print(input_str[i]+" not found")
+	else:
+		print("Please Enter correct input(Either 1 or 2)")
+		
 
 else:
 	print("Please Enter correct input.!\nBye")
